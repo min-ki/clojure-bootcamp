@@ -1,62 +1,61 @@
 (ns aoc2018.day1
-  (:require [utils.file :refer [read-file-and-to-integer-vector]]))
+  (:require [clojure.string :refer [split-lines]]))
 
+(def input (->> (slurp "resources/aoc2018/day1.txt")
+                split-lines
+                (map #(Integer/parseInt %))))
 
 (defn solve-part1-1 [input]
-  (loop [[first & rest-items :as in] input
+  (loop [[number & rest-numbers :as in] input
          out 0]
     (if (nil? in)
       out
-      (recur rest-items
-             (+ out first)))))
+      (recur rest-numbers
+             (+ out number)))))
 
 (defn solve-part1-2 [input]
   (reduce + 0 input))
 
+(comment
+  (->> input
+       solve-part1-2)
+  (->> input
+       solve-part1-1))
+
 
 (defn solve-part2-1 [input]
-  (loop [[change-value & rest-items] (cycle input)
-         frequency #{0}
+  (loop [[change-value & rest-change-values] input
+         found-frequencies #{0}
          current-frequency 0]
     (let [resulting-frequency (+ current-frequency change-value)]
-      (if (contains? frequency resulting-frequency)
+      (if (contains? found-frequencies resulting-frequency)
         resulting-frequency
-        (recur rest-items
-               (conj frequency resulting-frequency)
+        (recur rest-change-values
+               (conj found-frequencies resulting-frequency)
                resulting-frequency)))))
 
-
 (defn solve-part2-2 [input]
-  (reduce (fn [acc current]
-            (let [resulting-frequency (+ (:result acc) current)]
-              (if (contains? (:frequency acc) resulting-frequency)
+  (reduce (fn [{:keys [result found-frequencies] :as _acc}  current]
+            (let [resulting-frequency (+ result current)]
+              (if (contains? found-frequencies resulting-frequency)
                 (reduced resulting-frequency)
-                {:result resulting-frequency :frequency (conj (:frequency acc) resulting-frequency)})))
-          {:result 0 :frequency #{0}}
-          (cycle input)))
+                {:result resulting-frequency :found-frequencies (conj found-frequencies resulting-frequency)})))
+          {:result 0 :found-frequencies #{0}}
+          input))
 
 
 (comment
-  (def input (read-file-and-to-integer-vector "resources/aoc2018/day1.txt"))
+  (->> input
+       cycle ;; input을 무한시퀀스로 변경
+       solve-part2-1)
 
-  (Integer/parseInt "-10")
-  (Integer/parseInt "10")
+  (->> input
+       cycle
+       solve-part2-2))
 
-  ;; day1 - part1
-  (solve-part1-1 input)
-  (solve-part1-2 input)
-
-  (take 10 (cycle input))
-
-  ;; day1 - part2
-  (solve-part2-1 [1 -1]);; 0
-  (solve-part2-1 [3 3 4 -2 -4]) ;; 10
-  (solve-part2-1 [-6 3 8 5 -6])
-  (solve-part2-1 [7 7 -2 -7 -4])
-  (solve-part2-1 input)
-
-  (solve-part2-2 [1 -1])
-  (solve-part2-2 [3 3 4 -2 -4])
-  (solve-part2-2 [-6 3 8 5 -6])
-  (solve-part2-2 [7 7 -2 -7 -4])
-  (solve-part2-2 input))
+; [피드백 정리]
+; 하나의 함수에서 하는일이 많다.
+; 작은 함수로 나누어서 처리
+; first는 클로저 코어 함수 이름이므로 사용하지 않는게 좋다.
+; apply 함수
+; 의도가 잘들어나도록 변수명 작성
