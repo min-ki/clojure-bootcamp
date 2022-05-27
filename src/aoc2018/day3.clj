@@ -4,6 +4,8 @@
 
 (def input (split-lines (slurp "resources/aoc2018/day3.txt")))
 
+(def input-pattern #"#(\d+)\s@\s(\d+),(\d+):\s(\d+)x(\d+)")
+
 ;; 파싱을 위해서 정규표현식을 사용한다.
 ;; https://clojuredocs.org/clojure.core/re-matches
 
@@ -20,7 +22,7 @@
      ;; 문자열 파싱  ["#50 @ 470,772: 12x12" "50" "470" "772" "12" "12"]
      ;; in: #1 @ 258,327: 19x22
      ;; out: ["#1 @ 258,327: 19x22" "1" "258" "327" "19" "22"]
-     (map #(re-matches #"#(\d+)\s@\s(\d+),(\d+):\s(\d+)x(\d+)" %)) ; https://clojuredocs.org/clojure.core/re-matches
+     (map #(re-matches input-pattern %)) ; https://clojuredocs.org/clojure.core/re-matches
 
      ;; 정규표현식을 통해 찾은 문자열 리스트는 첫번 째에 원본이 있으므로 첫번째 것을 제외하고 가져옵니다.
      ;; out: ["1" "258" "327" "19" "22"]
@@ -45,7 +47,7 @@
 
 
 (comment
-  (re-matches #"#(\d+)\s@\s(\d+),(\d+):\s(\d+)x(\d+)" "#1 @ 258,327: 19x22") ;; ("1" "258" "327" "19" "22")
+  (re-matches input-pattern "#1 @ 258,327: 19x22") ;; ("1" "258" "327" "19" "22")
   (rest  ["#42 @ 675,276: 26x21" "42" "675" "276" "26" "21"])
   (number-list->key-map [1 258 327 19 22])
 
@@ -60,7 +62,7 @@
 ;; 겹치지 않는 영역을 가진 ID를 출력하시오. (문제에서 답이 하나만 나옴을 보장함)간을 채우면 아래와 같이 됨.
 
 (def input-part2 (->> input
-                      (map #(re-matches #"#(\d+)\s@\s(\d+),(\d+):\s(\d+)x(\d+)" %))
+                      (map #(re-matches input-pattern %))
                       (map rest)
                       (map #(map (fn [n] (Integer/parseInt n)) %))
                       (map number-list->key-map)))
