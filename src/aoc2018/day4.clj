@@ -5,11 +5,10 @@
 (def input (split-lines (slurp "resources/aoc2018/day4.txt")))
 
 (def input-pattern #"\[(\d+)-(\d+)-(\d+)\s(\d+):(\d+)\]\s(.*)")
-
-(def guard-shift-pattern #"Guard\s#(\d+)\sbegins\sshift")
+(def guard-id-regex-pattern #"Guard #(\d+) begins shift")
 
 (defn get-guard-id [description]
-  (first (seq (rest (re-matches guard-shift-pattern description)))))
+  (last (re-matches guard-id-regex-pattern description)))
 
 (defn list->map [[year month day hour minutes description]]
   {:year year :month month :day day :hour hour :minutes minutes :description description})
@@ -17,49 +16,62 @@
 (defn sort-by-date-asc [l]
   (sort-by (juxt :year :month :day :hour :minutes) l))
 
-(defn assoc-guard-fall-asleep-time [result guard-id wake-up-time asleep-time]
+(defn get-working-histories [input]
+  (->> input
+       (map #(re-matches input-pattern %))
+       (map rest)
+       (map list->map)
+       (sort-by-date-asc)))
 
-  (let [guard (keyword (str guard-id))
-        guard-sleep-time (guard result)]
-    (if (nil? guard-sleep-time)
-      (assoc result guard (- (Integer/parseInt wake-up-time) (Integer/parseInt asleep-time)))
-      (assoc result guard (+ guard-sleep-time (- (Integer/parseInt wake-up-time) (Integer/parseInt asleep-time)))))))
 
-(defn solve-part1 [input]
+(defn update-guard-sleep-time [result guard wake-up-time asleep-at]
+  (-> result (update guard (fnil concat []) (range asleep-at wake-up-time))))
 
-  (loop [[info & rest-infos :as all] input
-         current-guard-id nil
-         fall-asleep-time 0
-         result {}]
+(defn get-guard-sleeps-info [working-histories]
+  (reduce (fn [[result current-guard asleep-at] working-history]
+            (let [{:keys [minutes description]} working-history
+                  new-guard (get-guard-id description)
+                  wakes-up (= "wakes up" description)
+                  falls-asleep (= "falls asleep" description)]
+              (cond
+                new-guard [result new-guard nil] ;; 새로운 가드아이디를 설정해준다.
+                falls-asleep [result current-guard (Integer/parseInt minutes)] ;; 잠이든 시간을 넣어준다.
+                wakes-up [(update-guard-sleep-time result current-guard (Integer/parseInt minutes) asleep-at) current-guard nil])))
+          [{} nil nil]
+          working-histories))
 
-    (let [{:keys [minutes description]} info
-          guard-id (get-guard-id description)]
+;; 가드가 어떠한 분에 가장 많이 잠들었는지 찾는다.
+;; 179번 가드가 50분에 12번 잠들어있었다.
+(defn solve-part1 [working-histories]
+  (let [[guard-id minutes-sleeping] (->> working-histories
+                                         get-guard-sleeps-info
+                                         first
+                                         (sort-by (fn [[_guard_id mins]] (count mins)))
+                                         (last)) ;; 이 것이 가장 많이 잠든 가드와 잠잔 시간
+        chosen-minute (first (last (sort-by second (frequencies minutes-sleeping))))]
+    (* (Integer/parseInt guard-id) chosen-minute)))
 
-      ;; (when-let [guard guard-id]
-      ;;   (println "Guard ID: " guard result)
-      ;;   (println "Guard ID: " current-guard-id result))
 
-      (if (nil? rest-infos)
-        result
-        (cond
-          (not (nil? guard-id)) (recur rest-infos guard-id fall-asleep-time result)
-          (= "falls asleep" description) (recur rest-infos current-guard-id minutes result)
-          (= "wakes up" description) (recur
-                                      rest-infos
-                                      current-guard-id
-                                      0
-                                      (assoc-guard-fall-asleep-time
-                                       result
-                                       current-guard-id
-                                       minutes
-                                       fall-asleep-time)))))))
+;; {:guard-id "179", :chosen-minute 50, :solution 8950}
+(defn solve-part2 [working-histories]
+  (let [[guard-id [chosen-minute _chosen-amount]] (->> working-histories
+                                                       get-guard-sleeps-info
+                                                       first
+                                                       (map (fn [[guard-id mins]] [guard-id (last (sort-by second (frequencies mins)))]))
+                                                       (into {})
+                                                       (sort-by (fn [[_guard-id [_chosen-minute chosen-amount]]] chosen-amount))
+                                                       (last))]
+    (* (Integer/parseInt guard-id) chosen-minute)))
 
 (comment
-  (let [working-histories (->> input
-                               (map #(re-matches input-pattern %))
-                               (map rest)
-                               (map list->map)
-                               (sort-by-date-asc))]
+  (->> input
+       get-working-histories
+       solve-part1)
+
+  (->> input
+       get-working-histories
+       solve-part2))
 
 
-    (vals (solve-part1 working-histories))))
+
+
