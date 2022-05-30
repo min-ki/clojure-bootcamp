@@ -59,37 +59,29 @@
   (* (count (filter #(= 2 %) duplicate-counts)) (count (filter #(= 3 %) duplicate-counts))))
 
 
-  ;; 연오님이 알려주신 함수들
-    ;; (->> '([l 2] [r 3] [k 1])
-    ;;      (map second)
-    ;;      distinct
-    ;;      frequencies)
+;; 2차 리팩토링
+(defn str->character-frequencies [s]
+  (->> s
+       frequencies
+       vals))
 
-  ; 특정 조건 시 값 업데이트 하는 방법
-    ;; (let [data '([l 2] [r 3] [k 1])
-    ;;       result {:twice-count 0, :triple-count 0}
-    ;;       numbers (set (map second data))]
-    ;;   (cond (and (get numbers 2) (get numbers 3))
-    ;;         (-> result
-    ;;             (update :twice-count inc)
-    ;;             (update :triple-count inc))
-    ;;         (get numbers 2) (update result :twice-count inc)
-    ;;         (get numbers 3) (update result :triple-count inc)
-    ;;         :else result)))
+(defn count-duplicated-numbers [n freqs]
+  (->> freqs
+       (filter (fn [freqs]
+                 (some #(= n %) freqs)))
+       count))
 
-  ;; Feedback
-  ;; 문제를 복잡하게 풀기보다는 쉽게 해결하자
-  ;; 2와 3을 카운팅하는 부분이 2와 3을 동시에 카운팅하려고하는데 이는 명확하게 분리된 것
-  ;; x = y * z 처럼 y와 z를 각각 구해서 곱하는 방식으로 하면 문제가 더 쉬워질 수 있다.
+(comment
+  (->> (read-file-str->vector "resources/aoc2018/day2.txt")
+       (map str->character-frequencies)
+       (count-duplicated-numbers 2))
 
 
-;; (let [data (->> [1 2 3 4]
-;;                 (map inc)
-;;                 reverse)]
-;;   [(first data) (last data)]) ; juxt
+  (let [input (read-file-str->vector "resources/aoc2018/day2.txt")
+        duplicated-numbers (map str->character-frequencies input)]
+    (* (count-duplicated-numbers 2 duplicated-numbers)
+       (count-duplicated-numbers 3 duplicated-numbers))))
 
-(vec "abcd")
-(map (fn [c1 c2] (println c1 c2)) "abcd" "abcc")
 
 ;; (when (= 1 1) true)
 ;; when 절을 사용하면 동일한 문자는 내보내고 아닌경우 nil을 내보낼 수있다.
@@ -101,10 +93,8 @@
      (#(clojure.math.combinatorics/combinations % 2))
      (map diff-one-character-exactly)
      (filter (fn [l] (= 1
-                        (count (filter nil? l))))) ;; ((\w \l \k \i nil \g \s \q \y \f \e \c \j \q \q \m \n \x \a \k \t \d \r \h \b \z))
-     first ;; (\w \l \k \i nil \g \s \q \y \f \e \c \j \q \q \m \n \x \a \k \t \d \r \h \b \z)
-     (apply str)) ; wlkigsqyfecjqqmnxaktdrhbz
+                        (count (filter nil? l)))))
+     first
+     (apply str))
 
-; apply str을 하면 리스트를 문자열로 변환가능.
-; https://stackoverflow.com/questions/35884259/turning-a-list-of-strings-into-a-single-string-in-clojure
 
