@@ -43,6 +43,17 @@
           {:result 0 :found-frequencies #{0}}
           input))
 
+; Refactoring 5/27
+(defn find-first-duplicated [seen current]
+  (if (contains? seen current)
+    (reduced current)
+    (conj seen current)))
+
+(defn solve-part2-3 [input]
+  (->> input
+       cycle
+       (reductions + 0)
+       (reduce find-first-duplicated #{})))
 
 (comment
   (->> input
@@ -51,7 +62,15 @@
 
   (->> input
        cycle
-       solve-part2-2))
+       solve-part2-2)
+
+  (->> input
+       solve-part2-3)
+
+  (->> input
+       cycle
+       (reductions + 0) ;; 중간과정을 계속해서 볼 수 있는 함수
+       (reduce find-first-duplicated #{})))
 
 ; [피드백 정리]
 ; 하나의 함수에서 하는일이 많다.
