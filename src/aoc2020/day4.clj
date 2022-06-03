@@ -33,8 +33,8 @@
 
 (defn parse
   "
-   입력: \"byr:1971\niyr:2017 hgt:160cm\neyr:2020 ecl:hzl\npid:1570962 ...\"
-   출력: (([\"byr\" \"1971\"] [\"iyr\" \"2017\"] [\"hgt\" \"160cm\"])
+   input: \"byr:1971\niyr:2017 hgt:160cm\neyr:2020 ecl:hzl\npid:1570962 ...\"
+   output: (([\"byr\" \"1971\"] [\"iyr\" \"2017\"] [\"hgt\" \"160cm\"])
         ([\"byr\" \"1971\"] [\"iyr\" \"2017\"] [\"hgt\" \"160cm\"])
          ...)   
    "
@@ -48,18 +48,18 @@
 
 
 (defn have-required-fields?
-  "입력: ([\"cid\" \"286\"] [\"hgt\" \"166cm\"] [\"byr\" \"1977\"] [\"iyr\" \"2012\"] [\"pid\" \"541909675\"] [\"ecl\" \"oth\"] [\"eyr\" \"2020\"] [\"hcl\" \"#59eb12\"])
-   출력: true or false
+  "input: ([\"cid\" \"286\"] [\"hgt\" \"166cm\"] [\"byr\" \"1977\"] [\"iyr\" \"2012\"] [\"pid\" \"541909675\"] [\"ecl\" \"oth\"] [\"eyr\" \"2020\"] [\"hcl\" \"#59eb12\"])
+   output: true or false
   "
   [passport-fields]
   (let [fields (set (map first passport-fields))]
     (nil? (seq (difference passport-required-fields fields)))))
 
 (defn solve-part1
-  "입력: (([\"cid\" \"286\"] [\"hgt\" \"166cm\"] [\"byr\" \"1977\"] [\"iyr\" \"2012\"] [\"pid\" \"541909675\"] [\"ecl\" \"oth\"] [\"eyr\" \"2020\"] [\"hcl\" \"#59eb12\"])
+  "input: (([\"cid\" \"286\"] [\"hgt\" \"166cm\"] [\"byr\" \"1977\"] [\"iyr\" \"2012\"] [\"pid\" \"541909675\"] [\"ecl\" \"oth\"] [\"eyr\" \"2020\"] [\"hcl\" \"#59eb12\"])
          ([\"cid\" \"286\"] [\"hgt\" \"166cm\"] [\"byr\" \"1977\"] [\"iyr\" \"2012\"] [\"pid\" \"541909675\"] [\"ecl\" \"oth\"] [\"eyr\" \"2020\"] [\"hcl\" \"#59eb12\"])
          ...)
-   출력: 182
+   output: 182
    "
   [passports]
   (->> passports
@@ -67,9 +67,8 @@
        count))
 
 (defn transform
-  "
-   입력: [\"byr\" \"2012\"] | [\"hgt\" \"10cm\"]
-   출력: {:byr \"2012\"}    | {:hgt {:unit \"cm\" :scalar \"187\"}}
+  "input: [\"byr\" \"2012\"] | [\"hgt\" \"10cm\"]
+   output: {:byr \"2012\"}    | {:hgt {:unit \"cm\" :scalar \"187\"}}
    "
   [passports]
   (map (fn [passport]
