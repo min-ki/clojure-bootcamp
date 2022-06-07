@@ -3,7 +3,6 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str :refer [split]]))
 
-
 (s/def :passport/cid string?)
 (s/def :passport/byr #(<= 1920 (Integer/parseInt %) 2002))
 (s/def :passport/iyr #(<= 2010 (Integer/parseInt %) 2020))
@@ -29,15 +28,9 @@
 
 (def input (slurp "resources/aoc2020/day4.txt"))
 
-(def passport-required-fields #{"byr" "iyr" "eyr" "hgt" "ecl" "pid" "hcl"})
+(def passport-required-fields #{:byr :iyr :eyr :hgt :ecl :pid :hcl})
 
-(defn parse
-  "
-   input: \"byr:1971\niyr:2017 hgt:160cm\neyr:2020 ecl:hzl\npid:1570962 ...\"
-   output: (([\"byr\" \"1971\"] [\"iyr\" \"2017\"] [\"hgt\" \"160cm\"])
-        ([\"byr\" \"1971\"] [\"iyr\" \"2017\"] [\"hgt\" \"160cm\"])
-         ...)   
-   "
+(defn split-passport-raw-data
   [input]
   (->> (split input #"\n\n")
        (map #(re-seq #"[^\s\n]+" %))
@@ -46,62 +39,57 @@
                      (split passport-content #":"))
                    passport)))))
 
+(defn parse-fields
+  "여권을 입력으로 받아 여권의 필드들을 파싱합니다."
+  [passport]
+
+  (reduce (fn [acc [key value]]
+            (cond
+              (and (= key "hgt")
+                   (not (nil? (re-seq #"(\d+)cm" value)))) (assoc acc
+                                                                  (keyword key)
+                                                                  {:unit "cm"
+                                                                   :scalar (Integer/parseInt (second (first (re-seq #"(\d+)cm" value))))})
+              (and (= key "hgt")
+                   (not (nil? (re-seq #"(\d+)in" value)))) (assoc acc
+                                                                  (keyword key)
+                                                                  {:unit "in"
+                                                                   :scalar (Integer/parseInt (second (first (re-seq #"(\d+)in" value))))})
+              :else (assoc acc (keyword key) value)))
+          {}
+          passport))
+
+(defn parse-passport [passport-raw-seq]
+  (->> passport-raw-seq
+       split-passport-raw-data
+       (map #(parse-fields %))))
+
 
 (defn have-required-fields?
-  "input: ([\"cid\" \"286\"] [\"hgt\" \"166cm\"] [\"byr\" \"1977\"] [\"iyr\" \"2012\"] [\"pid\" \"541909675\"] [\"ecl\" \"oth\"] [\"eyr\" \"2020\"] [\"hcl\" \"#59eb12\"])
-   output: true or false
-  "
   [passport-fields]
-  (let [fields (set (map first passport-fields))]
+  (let [fields (set (keys passport-fields))]
     (nil? (seq (difference passport-required-fields fields)))))
 
+
 (defn solve-part1
-  "input: (([\"cid\" \"286\"] [\"hgt\" \"166cm\"] [\"byr\" \"1977\"] [\"iyr\" \"2012\"] [\"pid\" \"541909675\"] [\"ecl\" \"oth\"] [\"eyr\" \"2020\"] [\"hcl\" \"#59eb12\"])
-         ([\"cid\" \"286\"] [\"hgt\" \"166cm\"] [\"byr\" \"1977\"] [\"iyr\" \"2012\"] [\"pid\" \"541909675\"] [\"ecl\" \"oth\"] [\"eyr\" \"2020\"] [\"hcl\" \"#59eb12\"])
-         ...)
-   output: 182
-   "
   [passports]
   (->> passports
        (filter have-required-fields?)
        count))
 
-(defn transform
-  "input: [\"byr\" \"2012\"] | [\"hgt\" \"10cm\"]
-   output: {:byr \"2012\"}    | {:hgt {:unit \"cm\" :scalar \"187\"}}
-   "
+(defn solve-part2
   [passports]
-  (map (fn [passport]
-         (reduce (fn [acc [key value]]
-                   (cond
-                     (and (= key "hgt")
-                          (not (nil? (re-seq #"(\d+)cm" value)))) (assoc acc
-                                                                         (keyword key)
-                                                                         {:unit "cm"
-                                                                          :scalar (Integer/parseInt (second (first (re-seq #"(\d+)cm" value))))})
-                     (and (= key "hgt")
-                          (not (nil? (re-seq #"(\d+)in" value)))) (assoc acc
-                                                                         (keyword key)
-                                                                         {:unit "in"
-                                                                          :scalar (Integer/parseInt (second (first (re-seq #"(\d+)in" value))))})
-                     :else (assoc acc (keyword key) value)))
-                 {}
-                 passport))
-       passports))
-
-(defn solve-part2 [passports]
   (->> passports
        (filter have-required-fields?)
-       transform
        (filter #(s/valid? :passport/passport %))
        count))
 
 (comment
   (->> input
-       parse
+       parse-passport
        solve-part1)
 
 
   (->> input
-       parse
+       parse-passport
        solve-part2))
