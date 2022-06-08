@@ -17,7 +17,7 @@
        (map #(first %))
        (map #(rest %))
        (mapv (fn [[preceding-task trailing-task]]
-               {:preceding-task (first (seq preceding-task)) :trailing-task (first (seq trailing-task))}))))
+               {:preceding-task (keyword preceding-task) :trailing-task (keyword trailing-task)}))))
 
 
 (defn init-workers
@@ -30,11 +30,11 @@
 
 (defn calculate-task-time
   "주어진 작업의 작업시간을 계산하여 반환합니다.
-   Input:  \"A\"
+   Input:  :A
    Output: 61
    "
   [task]
-  (-> (int task)
+  (-> (int (first (name task)))
       (- (int \A))
       (+ 61)))
 
@@ -92,7 +92,7 @@
                {})))
 
 
-(defn init
+(defn init-build-status
   "작업에 필요한 데이터들을 설정합니다.
    Input:
      - workers: [{:task nil :time 0} {:task nil :time 0} {:task nil :time 0}]
@@ -193,8 +193,9 @@
         {:newly-assigned-workers newly-assigned-workers :newly-assigned-tasks (vec (concat assigned-tasks
                                                                                            available-tasks))}))))
 
-(defn do-task
-  "작업을 수행합니다.
+;; 각 단계 업데이트 해주는 함수 별도 분리
+(defn do-build-step
+  "작업을 한차례 수행합니다.
    
    Input:
      - workers ({:task nil, :time 0} {:task nil, :time 0} .. n)
@@ -208,8 +209,7 @@
             :assigned-tasks [F S D E ..]
             :trailing-tasks {A #{D E G L N O, B #{A C E K}}}}
    "
-
-  [{:keys [workers tasks finished-tasks trailing-tasks assigned-tasks] :as build-info}]
+  [{:keys [workers tasks finished-tasks trailing-tasks assigned-tasks] :as build-status}]
   (let [;; 기존 완료된 작업목록과 새로 완료된 작업목록을 합쳐서 가져옵니다.
         newly-finished-tasks (->> (get-completed-worker-tasks workers)
                                   (apply conj finished-tasks))
@@ -222,7 +222,7 @@
         {:keys [newly-assigned-workers newly-assigned-tasks]} (assign-next-tasks-to-workers refreshed-workers next-tasks assigned-tasks)
 
         processed-workers (mapv process-worker-task newly-assigned-workers)]
-    (-> build-info
+    (-> build-status
         (assoc :workers processed-workers)
         (update :task-time inc)
         (assoc :finished-tasks newly-finished-tasks)
@@ -245,24 +245,27 @@
             :trailing-tasks {A #{D E G L N O, B #{A C E K}}}}
    "
   [task-rules workers]
-  (->> (init workers task-rules)
-       (iterate do-task)
+  (->> (init-build-status workers task-rules)
+       (iterate do-build-step)
        (take-while (fn [{:keys [tasks finished-tasks]}]
                      (not (= tasks finished-tasks))))
        last))
+;; take-while -> drop-while로 변환
+
 
 (defn solve-part1
   "선행 후행 정보가 있는 작업을 받아서 작업의 순차적으로 처리되어야하는 작업의 순위를 문자열로 반환합니다.
    
-   Input: [{:preceding-task A :trailing-task B}
-           {:preceding-task A :trailing-task C}
-           {:preceding-task D :trailing-task E}]
+   Input: [{:preceding-task :A :trailing-task :B}
+           {:preceding-task :A :trailing-task :C}
+           {:preceding-task :D :trailing-task :E}]
    Output: \"FSDEGPLJKNRYOQUAMIHTCVWZXB\"
    "
   [task-rules]
   (->> (build task-rules
               (init-workers 1))
        :assigned-tasks
+       (map name)
        (apply str)))
 
 (defn solve-part2
