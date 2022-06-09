@@ -23,10 +23,10 @@
 (defn init-workers
   "작업에 사용할 작업자의 수를 입력받아 작업자 목록을 반환합니다.
    Input: 3   
-   Output: [{:task nil :time 0} {:task nil :time 0} {:task nil :time 0}]
+   Output: [{:task nil :remain-time 0} {:task nil :remain-time 0} {:task nil :remain-time 0}]
    "
   [num-of-workers]
-  (into [] (repeat num-of-workers {:task nil :time 0})))
+  (into [] (repeat num-of-workers {:task nil :remain-time 0})))
 
 (defn calculate-task-time
   "주어진 작업의 작업시간을 계산하여 반환합니다.
@@ -37,25 +37,6 @@
   (-> (int (first (name task)))
       (- (int \A))
       (+ 61)))
-
-(defn find-next-tasks
-  "다음에 해야할 작업 목록을 찾습니다.
-   Input:
-     - tasks: #{A B C ...}
-     - trailing-tasks
-     - finished-tasks #{A B C}
-   Output: (A C)
- "
-  [tasks trailing-tasks finished-tasks]
-  (->> tasks
-       (remove #(contains? finished-tasks %))
-       (map (fn [task]
-              {task (get trailing-tasks task)}))
-       (reduce into {})
-       (filter (fn [[_ preceding-tasks]]
-                 (subset? preceding-tasks finished-tasks))) ;; 주어진 task의 선행작업들이 이미 완료되었는지 찾아봅니다.
-       keys
-       sort))
 
 (defn task-rules->tasks
   "주어진 문제에서 다루는 모든 작업의 집합
@@ -95,7 +76,7 @@
 (defn init-build-status
   "작업에 필요한 데이터들을 설정합니다.
    Input:
-     - workers: [{:task nil :time 0} {:task nil :time 0} {:task nil :time 0}]
+     - workers: [{:task nil :remain-time 0} {:task nil :remain-time 0} {:task nil :remain-time 0}]
      - works-rules:   [{:preceding-task S, :trailing-task G}
                  {:preceding-task E, :trailing-task T}
                  {:preceding-task G, :trailing-task A}
@@ -103,9 +84,9 @@
                  {:preceding-task L, :trailing-task Z}
                  {:preceding-task F, :trailing-task H}] 
 
-   Output: {:workers [{:task nil :time 0}
-                      {:task nil :time 0}
-                      {:task nil :time 0}]
+   Output: {:workers [{:task nil :remain-time 0}
+                      {:task nil :remain-time 0}
+                      {:task nil :remain-time 0}]
             :tasks  #{A B C D E F G H I J K L M N O P Q R S T U V W X Y Z}
             :task-time 0
             :finished-tasks #{}
@@ -115,17 +96,17 @@
   [workers taks-rules]
   {:workers workers
    :tasks (task-rules->tasks taks-rules)
-   :task-time 0
+   :task-time -1
    :finished-tasks #{}
    :assigned-tasks []
    :trailing-tasks (tasks->trailing-tasks taks-rules)})
 
 (defn task-done-of-worker?
   "작업자의 작업이 완료되었는지 여부를 반환합니다.
-   Input: {:task A :time 0}
+   Input: {:task A :remain-time 0}
    Output: true"
   [worker]
-  (and (= 0 (:time worker))
+  (and (= 0 (:remain-time worker))
        (not (nil? (:task worker)))))
 
 (defn get-completed-worker-tasks
@@ -134,42 +115,37 @@
   (->> (filter task-done-of-worker? workers)
        (map :task)))
 
-(defn process-worker-task
-  "작업자가 담당하고있는 작업을 한차례 진행합니다. 이때 작업에 걸리는 시간을 1초 감소시켜줍니다.
-   Input: {:task A :time 1}
-   Output: {:task A :time 0}
+(defn decrease-task-remain-time
+  "남은 작업시간을 1초 감소시켜줍니다.
+   Input: {:task A :remain-time 1}
+   Output: {:task A :remain-time 0}
    "
   [worker]
   {:task (:task worker)
-   :time (max (dec (:time worker)) 0)})
+   :remain-time (max (dec (:remain-time worker)) 0)})
 
 (defn reset-task-end-of-worker
   "작업이 끝난 워커를 리셋합니다."
   [worker]
   (if (task-done-of-worker? worker)
-    {:task nil :time 0}
+    {:task nil :remain-time 0}
     worker))
-
-(defn reset-finished-workers
-  "작업이 끝난 워커들을 리셋하여 반환합니다."
-  [workers]
-  (map reset-task-end-of-worker workers))
 
 (defn idle-worker?
   "작업자에 할당된 작업이 없어 쉬고있는 작업자인지 확인하여 불리언값을 반환합니다..
-   Input: {:task A :time 20} or {:task nil :time 0}
+   Input: {:task A :remain-time 20} or {:task nil :remain-time 0}
    Output: false or true
    "
   [worker]
   (nil? (:task worker)))
 
-(defn assign-next-tasks-to-workers
+(defn assign-next-tasks-to-idle-workers
   "작업자들에게 다음에 해야할 작업을 할당합니다.
    Input
-     - workers: [{:task nil :time 0} {:task nil :time 0} {:task nil :time 0}]
+     - workers: [{:task nil :remain-time 0} {:task nil :remain-time 0} {:task nil :remain-time 0}]
      - next-tasks: (A C)
      -  
-   Output: {:newly-assigned-workers ({:task A :time 12}, {:task B :time 13} {:task nil :time 0})
+   Output: {:newly-assigned-workers ({:task A :remain-time 12}, {:task B :remain-time 13} {:task nil :remain-time 0})
             :newly-assigned-tasks [A B]}
    "
   [workers next-tasks assigned-tasks]
@@ -185,48 +161,87 @@
       {:newly-assigned-workers workers :newly-assigned-tasks assigned-tasks}
       (let [newly-assigned-workers (->> available-tasks
                                         (map (fn [task]
-                                               {:task task :time (calculate-task-time task)}))
+                                               {:task task :remain-time (calculate-task-time task)}))
                                         (concat (repeat (max (- (count idle-workers)
                                                                 (count unassigned-tasks))
-                                                             0) {:task nil :time 0}))
+                                                             0) {:task nil :remain-time 0}))
                                         (concat active-workers))]
         {:newly-assigned-workers newly-assigned-workers :newly-assigned-tasks (vec (concat assigned-tasks
                                                                                            available-tasks))}))))
 
+
+(defn renew-finished-tasks
+  "새롭게 완료된 작업을 기존 완료된 작업과 병합하여 완료된 작업 목록을 갱신합니다."
+  [{:keys [workers finished-tasks] :as build-status}]
+  (assoc build-status :finished-tasks (->> (get-completed-worker-tasks workers)
+                                           (into finished-tasks))))
+
+(defn reset-finished-workers
+  "작업이 끝난 워커들을 리셋하여 반환합니다."
+  [{:keys [workers] :as build-status}]
+  (assoc build-status :workers (map reset-task-end-of-worker workers)))
+
+(defn find-next-tasks
+  "다음에 해야할 작업 목록을 찾습니다.
+   Input:
+     - tasks: #{A B C ...}
+     - trailing-tasks
+     - finished-tasks #{A B C}
+   Output: (A C)
+ "
+  [tasks trailing-tasks finished-tasks]
+  (->> tasks
+       (remove #(contains? finished-tasks %))
+       (map (fn [task]
+              {task (get trailing-tasks task)}))
+       (reduce into {})
+       (filter (fn [[_ preceding-tasks]]
+                 (subset? preceding-tasks finished-tasks))) ;; 주어진 task의 선행작업들이 이미 완료되었는지 찾아봅니다.
+       keys
+       sort))
+
+(defn assign-tasks-to-workers
+  "다음 작업들을 작업자들에게 할당합니다."
+  [{:keys [workers tasks finished-tasks trailing-tasks assigned-tasks] :as build-status}]
+  (let [next-tasks (find-next-tasks tasks
+                                    trailing-tasks
+                                    finished-tasks)
+        {:keys [newly-assigned-workers
+                newly-assigned-tasks]} (assign-next-tasks-to-idle-workers workers
+                                                                          next-tasks
+                                                                          assigned-tasks)]
+    (-> build-status
+        (assoc :workers newly-assigned-workers)
+        (assoc :assigned-tasks newly-assigned-tasks))))
+
+(defn process-workers-task
+  "작업자들의 태스크들을 한단계 진행하고 작업시간을 1 증가시켜줍니다."
+  [{:keys [workers] :as build-status}]
+  (-> build-status
+      (assoc :workers (mapv decrease-task-remain-time workers))
+      (update :task-time inc)))
+
 ;; 각 단계 업데이트 해주는 함수 별도 분리
 (defn do-build-step
   "작업을 한차례 수행합니다.
-   
    Input:
-     - workers ({:task nil, :time 0} {:task nil, :time 0} .. n)
+     - workers ({:task nil, :remain-time 0} {:task nil, :remain-time 0} .. n)
      - tasks #{A B C D ... Z}
      - finished-tasks #{}
    
-   Output: {:workers [{:task nil, :time 0} {:task nil, :time 0} ...]
+   Output: {:workers [{:task nil, :remain-time 0} {:task nil, :remain-time 0} ...]
             :tasks #{A B C D E ...}
             :task-time 1000
             :finished-tasks #{A B C D ...}
             :assigned-tasks [F S D E ..]
             :trailing-tasks {A #{D E G L N O, B #{A C E K}}}}
    "
-  [{:keys [workers tasks finished-tasks trailing-tasks assigned-tasks] :as build-status}]
-  (let [;; 기존 완료된 작업목록과 새로 완료된 작업목록을 합쳐서 가져옵니다.
-        newly-finished-tasks (->> (get-completed-worker-tasks workers)
-                                  (apply conj finished-tasks))
-
-        ;; 작업이 완료된 작업자들을 초기화합니다.
-        refreshed-workers (reset-finished-workers workers)
-        next-tasks (find-next-tasks tasks trailing-tasks newly-finished-tasks)
-
-        ;; 새로 할당받은 작업과 할당된 작업자를 포함한 새로운 작업자 목록을 받습니다.
-        {:keys [newly-assigned-workers newly-assigned-tasks]} (assign-next-tasks-to-workers refreshed-workers next-tasks assigned-tasks)
-
-        processed-workers (mapv process-worker-task newly-assigned-workers)]
-    (-> build-status
-        (assoc :workers processed-workers)
-        (update :task-time inc)
-        (assoc :finished-tasks newly-finished-tasks)
-        (assoc :assigned-tasks newly-assigned-tasks))))
+  [build-status]
+  (->> build-status
+       renew-finished-tasks     ;; STEP 1. 완료된 작업 목록을 갱신합니다.
+       reset-finished-workers   ;; STEP 2. 완료된 작업자 목록을 리셋합니다.
+       assign-tasks-to-workers  ;; STEP 3. 다음 작업들을 작업자들에게 할당합니다.
+       process-workers-task))   ;; STEP 4. 작업자들의 태스크를 한단계 진행합니다.
 
 (defn build
   "작업자들에게 작업을 할당하고 작업을 수행합니다.
@@ -235,9 +250,9 @@
      task-rules: [{:preceding-step A :trailing-step B}
                     {:preceding-step A :trailing-step C}
                     {:preceding-step D :trailing-step E}]
-     workers: [{:task nil, :time 0} {:task nil, :time 0} ...]
+     workers: [{:task nil, :remain-time 0} {:task nil, :remain-time 0} ...]
    
-   Output: {:workers [{:task nil, :time 0} {:task nil, :time 0} ...]
+   Output: {:workers [{:task nil, :remain-time 0} {:task nil, :remain-time 0} ...]
             :tasks #{A B C D E ...}
             :task-time 1000
             :finished-tasks #{A B C D ...}
@@ -247,10 +262,9 @@
   [task-rules workers]
   (->> (init-build-status workers task-rules)
        (iterate do-build-step)
-       (take-while (fn [{:keys [tasks finished-tasks]}]
+       (drop-while (fn [{:keys [tasks finished-tasks]}]
                      (not (= tasks finished-tasks))))
-       last))
-;; take-while -> drop-while로 변환
+       first))
 
 
 (defn solve-part1
