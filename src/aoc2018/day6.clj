@@ -1,95 +1,108 @@
 (ns aoc2018.day6
-  (:require [clojure.string :refer [split-lines]]))
+  (:require [clojure.string :refer [split-lines
+                                    split]]))
 
-; Day 6: Chronoal Coordinates
-(def example ["1, 1", "1, 6" "8, 3" "3, 4" "5, 5" "8, 9"])
-(def input (split-lines (slurp "resources/aoc2018/day6.txt")))
+(def input (slurp "resources/aoc2018/day6.txt"))
 
-(defn find-edges-of-axises
-  [vertexes]
-  (let [xs (map first vertexes)
-        ys (map second vertexes)]
-    {:x-start (apply min xs)
-     :x-end   (apply max xs)
-     :y-start (apply min ys)
-     :y-end   (apply max ys)}))
+(defn parse-vertex
+  "N, M 형태의 문자열을 정수형 좌표 벡터로 변환한다.
+   Input: \"301, 291\"
+   Output: [301 291]
+   "
+  [s]
+  (->> (split s #", ")
+       (mapv #(Integer/parseInt %))))
 
-(defn generate-areas
-  [{:keys [x-end y-end]}]
-  (for [x (range (inc x-end))
-        y (range (inc y-end))]
-    [x y]))
+(defn parse
+  "input: 81, 157\n209, 355\n....
+   output: ({:id 0 :vertex [10 20]} ...)"
+  [s]
+  (->> (split-lines s)
+       (map-indexed
+        (fn [index line]
+          {:id index :vertex (parse-vertex line)}))))
 
 (defn manhattan-distance
+  "input: [[10 20] [30 40]]
+   output: 40 (맨해튼 거리)"
   [[x1 y1] [x2 y2]]
   (+ (abs (- x2 x1))
      (abs (- y2 y1))))
 
-(defn parse [input]
-  (->> input
-       (map #(clojure.string/split % #", "))
-       (map (fn [[x y]] [(Integer/parseInt x)
-                         (Integer/parseInt y)]))))
+(defn edges
+  "4분면 양끝쪽에 해당하는 좌표집합"
+  [x-start x-end y-start y-end]
+  (concat (map (fn [y] [x-start y]) (range y-start y-end))
+          (map (fn [y] [x-end y]) (range y-start y-end))
+          (map (fn [x] [x y-start]) (range x-start x-end))
+          (map (fn [x] [x y-end]) (range x-start x-end))))
+
+(defn shortest-distance
+  "구조분해로 첫번째, 두번째 길이의 데이터를 조회해서 둘이 길이가 같은지 체크한다.
+   두개가 다르다면 가장 길이가 짧은 것이 하나만 존재한다는 것이다."
+  [area vertexes]
+  (let [[[id1 distance1] [_id2 distance2]]
+        (->> vertexes
+             (map (fn [{:keys [id vertex]}]
+                    [id (manhattan-distance area vertex)]))
+             (sort-by second))]
+    (when (not= distance1 distance2)
+      id1)))
 
 
-;; edge영역을 가지는 area를 계산
-(defn infinite-area
-  [{:keys [x-start x-end y-start y-end]} [x y]]
-  (or (<= x x-start)
-      (>= x x-end)
-      (<= y y-start)
-      (>= y y-end)))
+(defn generate-areas
+  [x-start x-end y-start y-end]
+  (for [x (range x-start x-end)
+        y (range y-start y-end)]
+    [x y]))
 
+(defn solve-part1 [vertexes]
+  (let [coordinates (map :vertex vertexes)
+        x-start (apply min (map first coordinates))
+        y-start (apply min (map second coordinates))
+        x-end (apply max (map first coordinates))
+        y-end (apply max (map second coordinates))
+        infinite-ids (into #{}  ;; to
+                           (keep (fn [area]
+                                   (shortest-distance area
+                                                      vertexes)))  ;; xform - transducer
+                           (edges x-start x-end y-start y-end))]  ;; from
 
-(defn vertex-distances [finite-areas vertexes]
-  (let [distances (->> (for [area finite-areas
-                             vertex vertexes]
-                         {:vertex   vertex
-                          :area     area
-                          :distance (manhattan-distance vertex area)}))
-        distances-to-vertexes (group-by :area distances)
-        area-distance-group (group-by (juxt :area :distance) distances)]
+    (->> (generate-areas x-start x-end y-start y-end)
+         (keep (fn [area]
+                 (shortest-distance area vertexes)))
+         (remove infinite-ids)
+         frequencies
+         vals
+         sort
+         last)))
 
-    (reduce (fn [result area]
-              (let [distances-to-vertexes (get distances-to-vertexes area)
-                    shortest-distance (first (sort-by :distance distances-to-vertexes))
-                    owned? (= 1 (count (get area-distance-group [area (:distance shortest-distance)])))
-                    vertex-distances (get result (:vertex shortest-distance))]
+(defn safe-zone? [max-distances area vertexes]
+  (let [total-distances (reduce +
+                                (map #(max (manhattan-distance area (:vertex %)))
+                                     vertexes))]
+    (< total-distances max-distances)))
 
-                (if owned?
-                  (if (nil? vertex-distances)
-                    (conj result {(:vertex shortest-distance) [{:area     area
-                                                                :vertex   (:vertex shortest-distance)
-                                                                :distance (:distance shortest-distance)}]})
-                    (->> (conj vertex-distances {:area     area
-                                                 :vertex   (:vertex shortest-distance)
-                                                 :distance (:distance shortest-distance)})
-                         (assoc result (:vertex shortest-distance))))
-                  result)))
-            {}
-            finite-areas)))
+(def total-distances-less-than-10000? (partial safe-zone? 10000))
+
+(defn solve-part2 [vertexes]
+  (let [coordinates (map :vertex vertexes)
+        x-start (apply min (map first coordinates))
+        y-start (apply min (map second coordinates))
+        x-end (apply max (map first coordinates))
+        y-end (apply max (map second coordinates))
+        areas (generate-areas x-start x-end y-start y-end)]
+
+    (->> areas
+         (filter #(total-distances-less-than-10000? % vertexes))
+         count)))
 
 (comment
-  (let [vertexes (parse input)
-        edges (->> vertexes
-                   find-edges-of-axises)
-        areas (->> edges
-                   generate-areas)
-        inf-areas (->> areas
-                       (filter (partial infinite-area edges)))
-        finite-areas (remove (partial infinite-area edges) areas)
-        vertex-distances (vertex-distances finite-areas vertexes)]
-    (->>
-     (map (fn [[k v]] [k (count v)]) vertex-distances)
-     (sort-by second)
-     last)))
+  (require '[aoc2018.day6] :reload-all)
+  (->> input
+       parse
+       solve-part1)
 
-;; 가장자리 위치 
-;; Area는 locations (x, y)의 수 (가장 가까운)
-
-;; 1. 좌표들의 최대, 최소 값을 찾는다. -> 가장자리 위치
-;; 2. 주어진 제한 범위 안에서 모든 가능한 (x, y) locations를 찾는다.
-;; 3. 각각의 coordinate 와 location에 대해서 모든 manhattan distance를 계산한다.
-;; 4. 각 location에 대해서 가장 가까운 좌표를 결정한다.
-;; 5. 각 coordinate에 대해서 가장 가까운 locations를 찾는다.
-
+  (->> input
+       parse
+       solve-part2))
